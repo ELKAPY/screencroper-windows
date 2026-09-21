@@ -1,3 +1,19 @@
+import os
+import sys
+
+# Clean up stale or non-existent TCL/TK environment variables from previous runs
+for var in ("TCL_LIBRARY", "TK_LIBRARY"):
+    val = os.environ.get(var)
+    if val and not os.path.exists(val):
+        del os.environ[var]
+
+if getattr(sys, 'frozen', False):
+    base_dir = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    for t_name, var in [('_tcl_data', 'TCL_LIBRARY'), ('_tk_data', 'TK_LIBRARY'), ('tcl', 'TCL_LIBRARY'), ('tk', 'TK_LIBRARY')]:
+        cand = os.path.join(base_dir, t_name)
+        if os.path.exists(cand):
+            os.environ[var] = cand
+
 import ctypes
 from ctypes import wintypes
 import tkinter as tk
@@ -5,10 +21,8 @@ from tkinter import ttk, messagebox
 import tkinter.font as tkfont
 import threading
 from math import gcd
-import os
 import subprocess
 import json
-import sys
 
 # --- Localization ---
 STRINGS = {
@@ -1178,7 +1192,6 @@ def check_and_create_shortcuts():
     save_config(user_config)
 
 def do_restart_explorer():
-    import threading
     def _do_restart():
         try:
             ctypes.windll.ole32.CoInitialize(None)
@@ -1188,19 +1201,28 @@ def do_restart_explorer():
             ctypes.windll.shell32.SHChangeNotify(0x08000000, 0, None, None)
         except Exception:
             pass
-        subprocess.run("taskkill /f /im explorer.exe", shell=True, creationflags=0x08000000, capture_output=True)
-        local_app_data = os.environ.get("LOCALAPPDATA", "")
-        explorer_dir = os.path.join(local_app_data, "Microsoft", "Windows", "Explorer")
-        if os.path.exists(explorer_dir):
-            for f in os.listdir(explorer_dir):
-                if f.startswith("iconcache_") and f.endswith(".db"):
-                    try: os.remove(os.path.join(explorer_dir, f))
-                    except Exception: pass
-        old_cache = os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "IconCache.db")
-        if os.path.exists(old_cache):
-            try: os.remove(old_cache)
-            except Exception: pass
-        subprocess.Popen("explorer.exe", shell=True, creationflags=0x08000000)
+        try:
+            subprocess.run("taskkill /f /im explorer.exe", shell=True, creationflags=0x08000000, capture_output=True)
+        except Exception:
+            pass
+        try:
+            local_app_data = os.environ.get("LOCALAPPDATA", "")
+            explorer_dir = os.path.join(local_app_data, "Microsoft", "Windows", "Explorer")
+            if os.path.exists(explorer_dir):
+                for f in os.listdir(explorer_dir):
+                    if f.startswith("iconcache_") and f.endswith(".db"):
+                        try: os.remove(os.path.join(explorer_dir, f))
+                        except Exception: pass
+            old_cache = os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "IconCache.db")
+            if os.path.exists(old_cache):
+                try: os.remove(old_cache)
+                except Exception: pass
+        except Exception:
+            pass
+        try:
+            subprocess.Popen("explorer.exe", shell=True)
+        except Exception:
+            pass
         try:
             ctypes.windll.shell32.SHChangeNotify(0x08000000, 0, None, None)
         except Exception:
@@ -1294,4 +1316,5 @@ first_run = user_config.get("first_run", True)
 if first_run:
     root.after(500, check_and_create_shortcuts)
 
-root.mainloop()
+if __name__ == "__main__":
+    root.mainloop()
